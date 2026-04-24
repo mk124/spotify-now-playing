@@ -370,10 +370,12 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     NSURLSessionDataTask *task = [session dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         if (error) {
             //NSLog(@"Error,%@", [error localizedDescription]);
-            self.artworkMenuItem.image = nil;
-            self.artworkMenuItem.title = @"Could not load album artwork";
-            self.artworkMenuItem.action = @selector(setImage);
-            self.artworkMenuItem.toolTip = @"Click to try again";
+            dispatch_async(dispatch_get_main_queue(), ^(void) {
+                self.artworkMenuItem.image = nil;
+                self.artworkMenuItem.title = @"Could not load album artwork";
+                self.artworkMenuItem.action = @selector(setImage);
+                self.artworkMenuItem.toolTip = @"Click to try again";
+            });
         } else {
             //NSLog(@"%@", [[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]);
             NSMutableDictionary *parsedData = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:nil];
@@ -383,25 +385,30 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
             NSURLSessionDataTask *imageTask = [imageSession dataTaskWithRequest:imageUrlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
                 if (error) {
                     //NSLog(@"Error,%@", [error localizedDescription]);
-                    self.artworkMenuItem.image = nil;
-                    self.artworkMenuItem.title = @"Could not load album artwork";
-                    self.artworkMenuItem.action = @selector(setImage);
-                    self.artworkMenuItem.toolTip = @"Click to try again";
+                    dispatch_async(dispatch_get_main_queue(), ^(void) {
+                        self.artworkMenuItem.image = nil;
+                        self.artworkMenuItem.title = @"Could not load album artwork";
+                        self.artworkMenuItem.action = @selector(setImage);
+                        self.artworkMenuItem.toolTip = @"Click to try again";
+                    });
                 } else {
-                    self.currentAlbumArt = [[NSImage alloc] initWithData:data];
-                    self.currentAlbumArt.size = CGSizeMake(200, 200);
-                    self.artworkMenuItem.image = self.currentAlbumArt;
-                    self.artworkMenuItem.title = @"";
-                    self.artworkMenuItem.action = @selector(launchSpotify);
-                    self.artworkMenuItem.toolTip = nil;
+                    dispatch_async(dispatch_get_main_queue(), ^(void) {
+                        self.currentAlbumArt = [[NSImage alloc] initWithData:data];
+                        self.currentAlbumArt.size = CGSizeMake(200, 200);
+                        self.artworkMenuItem.image = self.currentAlbumArt;
+                        self.artworkMenuItem.title = @"";
+                        self.artworkMenuItem.action = @selector(launchSpotify);
+                        self.artworkMenuItem.toolTip = nil;
+                    });
                 }
             }];
             [imageTask resume];
             // if title was unavailable when song changed, add it now
             if ([self.currentSongName length] == 0) {
-                self.currentSongName = parsedData[@"title"];
+                NSString *parsedTitle = parsedData[@"title"];
                 // make UI changes in main thread
                 dispatch_async(dispatch_get_main_queue(), ^(void) {
+                    self.currentSongName = parsedTitle;
                     [self updateTitle];
                     self.songMenuItem.title = self.currentSongName;
                     self.statusItem.button.toolTip = [NSString stringWithFormat:@"%@\n%@\n%@",self.currentSongName,self.artistMenuItem.title,self.albumMenuItem.title];
