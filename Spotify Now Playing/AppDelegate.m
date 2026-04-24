@@ -30,7 +30,9 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 @property (nonatomic, strong) NSMenuItem *notificationStateMenuItem;
 @property (nonatomic, strong) NSMenuItem *startAtLoginMenuItem;
 @property (nonatomic, strong) NSTimer *titleRefreshTimer;
+@property (nonatomic, strong) NSDate *playbackPositionReferenceDate;
 @property (nonatomic) NSTimeInterval currentTrackDuration;
+@property (nonatomic) NSTimeInterval currentPlaybackPosition;
 @property (nonatomic) float panX;
 @property (nonatomic) BOOL playing;
 
@@ -129,6 +131,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.artistMenuItem.title = [[self executeAppleScript:@"get artist of current track"] stringValue];
         self.albumMenuItem.title =[[self executeAppleScript:@"get album of current track"] stringValue];
         self.currentTrackDuration = [self trackDurationFromSpotify];
+        [self refreshPlaybackPositionFromSpotify];
         [self updateTitle];
         self.statusItem.button.toolTip = [NSString stringWithFormat:@"%@\n%@\n%@",self.currentSongName,self.artistMenuItem.title,self.albumMenuItem.title];
         [self setImage];
@@ -149,6 +152,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.albumMenuItem.title = @"";
         self.playing = NO;
         self.currentTrackDuration = 0;
+        self.currentPlaybackPosition = 0;
+        self.playbackPositionReferenceDate = nil;
         self.statusItem.button.toolTip = @"Spotify Now Playing";
         [self updateTitleRefreshTimer];
     }
@@ -203,6 +208,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.albumMenuItem.title = @"";
         self.playing = NO;
         self.currentTrackDuration = 0;
+        self.currentPlaybackPosition = 0;
+        self.playbackPositionReferenceDate = nil;
         self.statusItem.button.toolTip = @"Spotify Now Playing";
         [self updateTitleRefreshTimer];
     } else {
@@ -216,10 +223,12 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
             self.artistMenuItem.title = [[aNotification userInfo] objectForKey:@"Artist"];
             self.albumMenuItem.title = [[aNotification userInfo] objectForKey:@"Album"];
             self.currentTrackDuration = [self trackDurationFromSpotify];
+            [self refreshPlaybackPositionFromSpotify];
             [self updateTitle];
             self.statusItem.button.toolTip = [NSString stringWithFormat:@"%@\n%@\n%@",self.currentSongName,self.artistMenuItem.title,self.albumMenuItem.title];
             [self showNotification];
         } else {
+            [self refreshPlaybackPositionFromSpotify];
             [self updateTitle];
         }
     }
@@ -434,7 +443,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     NSString *duration = @"";
     NSString *remaining = @"";
     if ([SNPMenuBarTitleFormatter formatUsesPlaybackTime:format]) {
-        NSTimeInterval playbackPosition = [self playbackPositionFromSpotify];
+        NSTimeInterval playbackPosition = [self estimatedPlaybackPosition];
         position = [self stringFromPlaybackTime:playbackPosition];
         if (self.currentTrackDuration > 0) {
             duration = [self stringFromPlaybackTime:self.currentTrackDuration];
@@ -476,6 +485,25 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 {
     timer = nil;
     [self updateTitle];
+}
+
+- (void)refreshPlaybackPositionFromSpotify
+{
+    self.currentPlaybackPosition = [self playbackPositionFromSpotify];
+    self.playbackPositionReferenceDate = [NSDate date];
+}
+
+- (NSTimeInterval)estimatedPlaybackPosition
+{
+    NSTimeInterval playbackPosition = self.currentPlaybackPosition;
+    if (self.playing && self.playbackPositionReferenceDate) {
+        playbackPosition += [[NSDate date] timeIntervalSinceDate:self.playbackPositionReferenceDate];
+    }
+    playbackPosition = MAX(playbackPosition, 0);
+    if (self.currentTrackDuration > 0) {
+        playbackPosition = MIN(playbackPosition, self.currentTrackDuration);
+    }
+    return playbackPosition;
 }
 
 - (NSTimeInterval)playbackPositionFromSpotify
