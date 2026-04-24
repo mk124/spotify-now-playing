@@ -16,7 +16,10 @@ Download and unzip the [latest release](https://github.com/abeljohn/spotify-now-
 ## Features
 
 Song name in menubar
-- configurable menubar format with placeholders for playback status, artist, title, and album
+- configurable menubar format with placeholders for playback status, artist, title, album, and playback time
+- default menubar format: `{playbackSymbol} [{artist} - ]{title}`
+- available format placeholders: `{playbackSymbol}`, `{artist}`, `{title}`, `{album}`, `{position}`, `{duration}`, `{remaining}`
+- optional format segments: text inside `[...]` appears only when all placeholders in it have values
 - hover over song name to see full song name, artist, and album
 - control music playback with a click and hold on song name to play/pause, click and drag right to skip, click and drag left to go back
 - opening menubar application shows album art, full song name, artist, and album

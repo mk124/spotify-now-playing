@@ -29,6 +29,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 @property (nonatomic, strong) NSMenuItem *albumMenuItem;
 @property (nonatomic, strong) NSMenuItem *notificationStateMenuItem;
 @property (nonatomic, strong) NSMenuItem *startAtLoginMenuItem;
+@property (nonatomic, strong) NSTimer *titleRefreshTimer;
+@property (nonatomic) NSTimeInterval currentTrackDuration;
 @property (nonatomic) float panX;
 @property (nonatomic) BOOL playing;
 
@@ -91,7 +93,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     
     // initialize options menu items
     NSMenuItem *menubarFormatMenuItem = [[NSMenuItem alloc] initWithTitle:@"Menubar format..." action:@selector(editMenubarFormat) keyEquivalent:@""];
-    menubarFormatMenuItem.toolTip = @"Customize the menu bar title with {playbackSymbol}, {artist}, {title}, and {album}";
+    menubarFormatMenuItem.toolTip = @"Customize the menu bar title with track and playback time placeholders";
     self.notificationStateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Song notifications" action:@selector(toggleNotifications) keyEquivalent:@""];
     self.notificationStateMenuItem.toolTip = @"Get a notification when a new song comes on";
     self.notificationStateMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPNotificationStatePreferenceKey];
@@ -126,6 +128,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.songMenuItem.title = self.currentSongName;
         self.artistMenuItem.title = [[self executeAppleScript:@"get artist of current track"] stringValue];
         self.albumMenuItem.title =[[self executeAppleScript:@"get album of current track"] stringValue];
+        self.currentTrackDuration = [self trackDurationFromSpotify];
         [self updateTitle];
         self.statusItem.button.toolTip = [NSString stringWithFormat:@"%@\n%@\n%@",self.currentSongName,self.artistMenuItem.title,self.albumMenuItem.title];
         [self setImage];
@@ -145,7 +148,9 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.artistMenuItem.title = @"Click here to open Spotify.";
         self.albumMenuItem.title = @"";
         self.playing = NO;
+        self.currentTrackDuration = 0;
         self.statusItem.button.toolTip = @"Spotify Now Playing";
+        [self updateTitleRefreshTimer];
     }
     
     // set up notification center
@@ -166,7 +171,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     NSAlert *alert = [[NSAlert alloc] init];
     {
         [alert setMessageText:@"Welcome to Spotify Now Playing!"];
-        [alert setInformativeText:@"Spotify Now Playing gives you easy access to see what song is playing in Spotify!\n\nHelp:\nClick on SNP up in the menu bar to see information about the song that's currently playing.\nClick and hold to play/pause, and click and drag right/left to skip/go back.\n\nOptions:\nMenubar format: customize the menu bar title with {playbackSymbol}, {artist}, {title}, and {album}.\nSong notifications: get a notification when a new song comes on.\nStart at login: automatically launch SNP when starting up your computer.\n\nEnjoy!\n-Abel John"];
+        [alert setInformativeText:@"Spotify Now Playing gives you easy access to see what song is playing in Spotify!\n\nHelp:\nClick on SNP up in the menu bar to see information about the song that's currently playing.\nClick and hold to play/pause, and click and drag right/left to skip/go back.\n\nOptions:\nMenubar format: customize the menu bar title with {playbackSymbol}, {artist}, {title}, {album}, {position}, {duration}, and {remaining}.\nSong notifications: get a notification when a new song comes on.\nStart at login: automatically launch SNP when starting up your computer.\n\nEnjoy!\n-Abel John"];
         [alert addButtonWithTitle:@"Okay!"];
         [alert setShowsSuppressionButton:YES];
         NSCell *cell = [[alert suppressionButton] cell];
@@ -197,7 +202,9 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.artistMenuItem.title = @"Click here to open Spotify.";
         self.albumMenuItem.title = @"";
         self.playing = NO;
+        self.currentTrackDuration = 0;
         self.statusItem.button.toolTip = @"Spotify Now Playing";
+        [self updateTitleRefreshTimer];
     } else {
         self.playing = [[[aNotification userInfo] objectForKey:@"Player State"] isEqualToString:@"Playing"];
         if (![[[aNotification userInfo] objectForKey:@"Track ID"] isEqualToString:self.trackID]
@@ -208,6 +215,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
             self.songMenuItem.title = self.currentSongName;
             self.artistMenuItem.title = [[aNotification userInfo] objectForKey:@"Artist"];
             self.albumMenuItem.title = [[aNotification userInfo] objectForKey:@"Album"];
+            self.currentTrackDuration = [self trackDurationFromSpotify];
             [self updateTitle];
             self.statusItem.button.toolTip = [NSString stringWithFormat:@"%@\n%@\n%@",self.currentSongName,self.artistMenuItem.title,self.albumMenuItem.title];
             [self showNotification];
@@ -227,7 +235,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 {
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:@"Menubar Format"];
-    [alert setInformativeText:@"Use {playbackSymbol}, {artist}, {title}, and {album}. Text inside [...] appears only when all placeholders in it have values."];
+    [alert setInformativeText:@"Use {playbackSymbol}, {artist}, {title}, {album}, {position}, {duration}, and {remaining}. Text inside [...] appears only when all placeholders in it have values."];
     [alert addButtonWithTitle:@"Save"];
     [alert addButtonWithTitle:@"Cancel"];
     [alert addButtonWithTitle:@"Restore Defaults"];
@@ -244,6 +252,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     } else if (response == NSAlertThirdButtonReturn) {
         [[NSUserDefaults standardUserDefaults] setObject:SNPDefaultMenubarFormat forKey:SNPMenubarFormatPreferenceKey];
         [self updateTitle];
+    } else {
+        [self updateTitleRefreshTimer];
     }
 }
 
@@ -408,21 +418,86 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     if ([self.currentSongName length] == 0) {
         self.statusItem.button.title = @"";
         self.statusItem.button.image = self.menubarImage;
+        [self updateTitleRefreshTimer];
         return;
     }
 
-    self.statusItem.button.title = [SNPMenuBarTitleFormatter titleWithFormat:[self menubarFormat]
+    NSString *format = [self menubarFormat];
+    NSString *position = @"";
+    NSString *duration = @"";
+    NSString *remaining = @"";
+    if ([SNPMenuBarTitleFormatter formatUsesPlaybackTime:format]) {
+        NSTimeInterval playbackPosition = [self playbackPositionFromSpotify];
+        position = [self stringFromPlaybackTime:playbackPosition];
+        if (self.currentTrackDuration > 0) {
+            duration = [self stringFromPlaybackTime:self.currentTrackDuration];
+            remaining = [NSString stringWithFormat:@"-%@", [self stringFromPlaybackTime:MAX(self.currentTrackDuration - playbackPosition, 0)]];
+        }
+    }
+
+    self.statusItem.button.title = [SNPMenuBarTitleFormatter titleWithFormat:format
                                                                     songTitle:self.currentSongName
                                                                        artist:self.artistMenuItem.title
                                                                         album:self.albumMenuItem.title
+                                                                     position:position
+                                                                     duration:duration
+                                                                    remaining:remaining
                                                                       playing:self.playing];
     [self preventBlankTitle];
+    [self updateTitleRefreshTimer];
 }
 
 - (NSString *)menubarFormat
 {
     NSString *format = [[NSUserDefaults standardUserDefaults] stringForKey:SNPMenubarFormatPreferenceKey];
     return format ?: SNPDefaultMenubarFormat;
+}
+
+- (void)updateTitleRefreshTimer
+{
+    if (self.playing && [self.currentSongName length] != 0 && [SNPMenuBarTitleFormatter formatUsesPlaybackTime:[self menubarFormat]]) {
+        if (!self.titleRefreshTimer) {
+            self.titleRefreshTimer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(titleRefreshTimerFired:) userInfo:nil repeats:YES];
+        }
+    } else {
+        [self.titleRefreshTimer invalidate];
+        self.titleRefreshTimer = nil;
+    }
+}
+
+- (void)titleRefreshTimerFired:(NSTimer *)timer
+{
+    timer = nil;
+    [self updateTitle];
+}
+
+- (NSTimeInterval)playbackPositionFromSpotify
+{
+    NSString *position = [[self executeAppleScript:@"get player position"] stringValue];
+    return [position doubleValue];
+}
+
+- (NSTimeInterval)trackDurationFromSpotify
+{
+    NSString *duration = [[self executeAppleScript:@"get duration of current track"] stringValue];
+    return [duration doubleValue] / 1000.0;
+}
+
+- (NSString *)stringFromPlaybackTime:(NSTimeInterval)time
+{
+    NSInteger totalSeconds = (NSInteger)time;
+    if (totalSeconds < 0) {
+        totalSeconds = 0;
+    }
+
+    NSInteger hours = totalSeconds / 3600;
+    NSInteger minutes = (totalSeconds / 60) % 60;
+    NSInteger seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+        return [NSString stringWithFormat:@"%ld:%02ld:%02ld", hours, minutes, seconds];
+    }
+    return [NSString stringWithFormat:@"%ld:%02ld", minutes, seconds];
 }
 
 - (void)preventBlankTitle
@@ -443,6 +518,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 
 - (void)quit
 {
+    [self.titleRefreshTimer invalidate];
+    self.titleRefreshTimer = nil;
     [[NSUserNotificationCenter defaultUserNotificationCenter] removeAllDeliveredNotifications];
     [[NSApplication sharedApplication] terminate:self];
 }

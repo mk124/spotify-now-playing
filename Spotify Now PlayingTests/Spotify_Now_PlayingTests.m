@@ -61,4 +61,24 @@
     XCTAssertEqualObjects(withoutAlbum, @"Sweet Disposition");
 }
 
+- (void)testPlaybackTimePlaceholders {
+    NSString *title = [SNPMenuBarTitleFormatter titleWithFormat:@"{position}/{duration} {remaining} {title}"
+                                                      songTitle:@"Sweet Disposition"
+                                                         artist:@"The Temper Trap"
+                                                          album:@"Conditions"
+                                                       position:@"1:23"
+                                                       duration:@"3:45"
+                                                      remaining:@"-2:22"
+                                                        playing:YES];
+
+    XCTAssertEqualObjects(title, @"1:23/3:45 -2:22 Sweet Disposition");
+}
+
+- (void)testPlaybackTimePlaceholderDetection {
+    XCTAssertFalse([SNPMenuBarTitleFormatter formatUsesPlaybackTime:SNPDefaultMenubarFormat]);
+    XCTAssertTrue([SNPMenuBarTitleFormatter formatUsesPlaybackTime:@"{position} {title}"]);
+    XCTAssertTrue([SNPMenuBarTitleFormatter formatUsesPlaybackTime:@"{duration} {title}"]);
+    XCTAssertTrue([SNPMenuBarTitleFormatter formatUsesPlaybackTime:@"{remaining} {title}"]);
+}
+
 @end

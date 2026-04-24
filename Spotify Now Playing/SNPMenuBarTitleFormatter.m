@@ -10,16 +10,44 @@ NSString * const SNPDefaultMenubarFormat = @"{playbackSymbol} [{artist} - ]{titl
                         album:(NSString *)album
                       playing:(BOOL)playing
 {
+    return [self titleWithFormat:format
+                       songTitle:songTitle
+                          artist:artist
+                           album:album
+                        position:@""
+                        duration:@""
+                       remaining:@""
+                         playing:playing];
+}
+
++ (NSString *)titleWithFormat:(NSString *)format
+                    songTitle:(NSString *)songTitle
+                       artist:(NSString *)artist
+                        album:(NSString *)album
+                     position:(NSString *)position
+                     duration:(NSString *)duration
+                    remaining:(NSString *)remaining
+                      playing:(BOOL)playing
+{
     NSDictionary<NSString *, NSString *> *values = @{
         @"title": songTitle ?: @"",
         @"artist": artist ?: @"",
         @"album": album ?: @"",
+        @"position": position ?: @"",
+        @"duration": duration ?: @"",
+        @"remaining": remaining ?: @"",
         @"playbackSymbol": playing ? @"▶" : @"⏸"
     };
     NSString *formatString = format ?: SNPDefaultMenubarFormat;
     NSString *optionalText = [self stringByRenderingOptionalSegmentsInString:formatString values:values];
     NSString *title = [self stringByReplacingPlaceholdersInString:optionalText values:values];
     return [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
+
++ (BOOL)formatUsesPlaybackTime:(NSString *)format
+{
+    NSString *formatString = format ?: SNPDefaultMenubarFormat;
+    return [formatString containsString:@"{position}"] || [formatString containsString:@"{duration}"] || [formatString containsString:@"{remaining}"];
 }
 
 + (NSString *)stringByRenderingOptionalSegmentsInString:(NSString *)string values:(NSDictionary<NSString *, NSString *> *)values
