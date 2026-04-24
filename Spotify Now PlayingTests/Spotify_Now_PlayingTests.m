@@ -7,6 +7,7 @@
 //
 
 #import <XCTest/XCTest.h>
+#import "../Spotify Now Playing/SNPMenuBarTitleFormatter.h"
 
 @interface Spotify_Now_PlayingTests : XCTestCase
 
@@ -14,24 +15,50 @@
 
 @implementation Spotify_Now_PlayingTests
 
-- (void)setUp {
-    // Put setup code here. This method is called before the invocation of each test method in the class.
+- (void)testDefaultFormatUsesPlaybackSymbolArtistAndTitle {
+    NSString *title = [SNPMenuBarTitleFormatter titleWithFormat:SNPDefaultMenubarFormat
+                                                      songTitle:@"Sweet Disposition"
+                                                         artist:@"The Temper Trap"
+                                                          album:@"Conditions"
+                                                        playing:YES];
+
+    XCTAssertEqualObjects(title, @"▶ The Temper Trap - Sweet Disposition");
 }
 
-- (void)tearDown {
-    // Put teardown code here. This method is called after the invocation of each test method in the class.
+- (void)testOptionalSegmentIsHiddenWhenPlaceholderIsEmpty {
+    NSString *title = [SNPMenuBarTitleFormatter titleWithFormat:SNPDefaultMenubarFormat
+                                                      songTitle:@"Sweet Disposition"
+                                                         artist:@""
+                                                          album:@"Conditions"
+                                                        playing:YES];
+
+    XCTAssertEqualObjects(title, @"▶ Sweet Disposition");
 }
 
-- (void)testExample {
-    // This is an example of a functional test case.
-    // Use XCTAssert and related functions to verify your tests produce the correct results.
+- (void)testPausedPlaybackSymbol {
+    NSString *title = [SNPMenuBarTitleFormatter titleWithFormat:@"{playbackSymbol} {title}"
+                                                      songTitle:@"Sweet Disposition"
+                                                         artist:@"The Temper Trap"
+                                                          album:@"Conditions"
+                                                        playing:NO];
+
+    XCTAssertEqualObjects(title, @"⏸ Sweet Disposition");
 }
 
-- (void)testPerformanceExample {
-    // This is an example of a performance test case.
-    [self measureBlock:^{
-        // Put the code you want to measure the time of here.
-    }];
+- (void)testAlbumOptionalSegment {
+    NSString *withAlbum = [SNPMenuBarTitleFormatter titleWithFormat:@"{title}[ ({album})]"
+                                                          songTitle:@"Sweet Disposition"
+                                                             artist:@"The Temper Trap"
+                                                              album:@"Conditions"
+                                                            playing:YES];
+    NSString *withoutAlbum = [SNPMenuBarTitleFormatter titleWithFormat:@"{title}[ ({album})]"
+                                                             songTitle:@"Sweet Disposition"
+                                                                artist:@"The Temper Trap"
+                                                                 album:@""
+                                                               playing:YES];
+
+    XCTAssertEqualObjects(withAlbum, @"Sweet Disposition (Conditions)");
+    XCTAssertEqualObjects(withoutAlbum, @"Sweet Disposition");
 }
 
 @end

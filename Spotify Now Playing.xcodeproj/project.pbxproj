@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B5CA8D45228E0A82004097C7 /* PFMoveApplication.m in Sources */ = {isa = PBXBuildFile; fileRef = B5CA8D44228E0A82004097C7 /* PFMoveApplication.m */; settings = {COMPILER_FLAGS = "-fno-objc-arc"; }; };
+		B5F011032C2C000000000001 /* SNPMenuBarTitleFormatter.m in Sources */ = {isa = PBXBuildFile; fileRef = B5F011022C2C000000000001 /* SNPMenuBarTitleFormatter.m */; };
 		B5DA5B73228BC6EE00900729 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B5DA5B72228BC6EE00900729 /* AppDelegate.m */; };
 		B5DA5B76228BC6EE00900729 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = B5DA5B75228BC6EE00900729 /* ViewController.m */; };
 		B5DA5B78228BC6EF00900729 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B5DA5B77228BC6EF00900729 /* Assets.xcassets */; };
@@ -37,6 +38,8 @@
 /* Begin PBXFileReference section */
 		B5CA8D43228E0A82004097C7 /* PFMoveApplication.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PFMoveApplication.h; sourceTree = "<group>"; };
 		B5CA8D44228E0A82004097C7 /* PFMoveApplication.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PFMoveApplication.m; sourceTree = "<group>"; };
+		B5F011012C2C000000000001 /* SNPMenuBarTitleFormatter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SNPMenuBarTitleFormatter.h; sourceTree = "<group>"; };
+		B5F011022C2C000000000001 /* SNPMenuBarTitleFormatter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SNPMenuBarTitleFormatter.m; sourceTree = "<group>"; };
 		B5DA5B6E228BC6EE00900729 /* Spotify Now Playing.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Spotify Now Playing.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5DA5B71228BC6EE00900729 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		B5DA5B72228BC6EE00900729 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -113,6 +116,8 @@
 			children = (
 				B5DA5B71228BC6EE00900729 /* AppDelegate.h */,
 				B5DA5B72228BC6EE00900729 /* AppDelegate.m */,
+				B5F011012C2C000000000001 /* SNPMenuBarTitleFormatter.h */,
+				B5F011022C2C000000000001 /* SNPMenuBarTitleFormatter.m */,
 				B5DA5B74228BC6EE00900729 /* ViewController.h */,
 				B5DA5B75228BC6EE00900729 /* ViewController.m */,
 				B5DA5B77228BC6EF00900729 /* Assets.xcassets */,
@@ -281,6 +286,7 @@
 				B5DA5B76228BC6EE00900729 /* ViewController.m in Sources */,
 				B5DA5B7E228BC6EF00900729 /* main.m in Sources */,
 				B5DA5B73228BC6EE00900729 /* AppDelegate.m in Sources */,
+				B5F011032C2C000000000001 /* SNPMenuBarTitleFormatter.m in Sources */,
 				B5CA8D45228E0A82004097C7 /* PFMoveApplication.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

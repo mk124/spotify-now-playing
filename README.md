@@ -16,15 +16,13 @@ Download and unzip the [latest release](https://github.com/abeljohn/spotify-now-
 ## Features
 
 Song name in menubar
-- optional playing indicator to show song is playing
-- shortens song name by hiding parentheticals
+- configurable menubar format with placeholders for playback status, artist, title, and album
 - hover over song name to see full song name, artist, and album
 - control music playback with a click and hold on song name to play/pause, click and drag right to skip, click and drag left to go back
 - opening menubar application shows album art, full song name, artist, and album
-- alternatively, the song name can be hidden to reduce menubar clutter
 
-<img src="screenshots/menubar_11_light.png" alt="menubar screenshot light mode" title="Song name displayed with playing indicator" width="40%">
-<img src="screenshots/menubar_11_dark.png" alt="menubar screenshot dark mode" title="Song name displayed with playing indicator" width="40%">
+<img src="screenshots/menubar_11_light.png" alt="menubar screenshot light mode" title="Song name displayed in the menubar" width="40%">
+<img src="screenshots/menubar_11_dark.png" alt="menubar screenshot dark mode" title="Song name displayed in the menubar" width="40%">
 
 <img src="screenshots/app_11_light.png" alt="application screenshot light mode" title="Expanded menubar application" width="40%">
 <img src="screenshots/app_11_dark.png" alt="application screenshot dark mode" title="Expanded menubar application" width="40%">

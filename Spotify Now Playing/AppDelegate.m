@@ -8,10 +8,10 @@
 
 #import "AppDelegate.h"
 #import "PFMoveApplication.h"
+#import "SNPMenuBarTitleFormatter.h"
 
-static NSString * const SNPPlayerStatePreferenceKey = @"SNPPlayerState";
 static NSString * const SNPNotificationStatePreferenceKey = @"SNPNotificationState";
-static NSString * const SNPMenuIconPreferenceKey = @"SNPMenuIcon";
+static NSString * const SNPMenubarFormatPreferenceKey = @"SNPMenubarFormat";
 static NSString * const SNPStartAtLoginPreferenceKey = @"SNPStartAtLogin";
 static NSString * const SNPStartupInformationPreferenceKey = @"SNPStartupInformation";
 static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
@@ -27,9 +27,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 @property (nonatomic, strong) NSMenuItem *songMenuItem;
 @property (nonatomic, strong) NSMenuItem *artistMenuItem;
 @property (nonatomic, strong) NSMenuItem *albumMenuItem;
-@property (nonatomic, strong) NSMenuItem *playerStateMenuItem;
 @property (nonatomic, strong) NSMenuItem *notificationStateMenuItem;
-@property (nonatomic, strong) NSMenuItem *menuIconMenuItem;
 @property (nonatomic, strong) NSMenuItem *startAtLoginMenuItem;
 @property (nonatomic) float panX;
 @property (nonatomic) BOOL playing;
@@ -42,6 +40,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
     PFMoveToApplicationsFolderIfNecessary();
+    [[NSUserDefaults standardUserDefaults] registerDefaults:@{SNPMenubarFormatPreferenceKey: SNPDefaultMenubarFormat}];
     
     // show welcome screen
     if (![[NSUserDefaults standardUserDefaults] boolForKey:SNPStartupInformationPreferenceKey]) {
@@ -91,15 +90,11 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     self.albumMenuItem = [[NSMenuItem alloc] initWithTitle:@"" action:@selector(launchSpotify) keyEquivalent:@""];
     
     // initialize options menu items
-    self.playerStateMenuItem = [[NSMenuItem alloc] initWithTitle:@"View play icon in menubar" action:[[NSUserDefaults standardUserDefaults] boolForKey:SNPMenuIconPreferenceKey]?nil:@selector(togglePlayerState) keyEquivalent:@""];
-    self.playerStateMenuItem.toolTip = @"Show a play icon in the menu bar when song is playing";
-    self.playerStateMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPPlayerStatePreferenceKey];
+    NSMenuItem *menubarFormatMenuItem = [[NSMenuItem alloc] initWithTitle:@"Menubar format..." action:@selector(editMenubarFormat) keyEquivalent:@""];
+    menubarFormatMenuItem.toolTip = @"Customize the menu bar title with {playbackSymbol}, {artist}, {title}, and {album}";
     self.notificationStateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Song notifications" action:@selector(toggleNotifications) keyEquivalent:@""];
     self.notificationStateMenuItem.toolTip = @"Get a notification when a new song comes on";
     self.notificationStateMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPNotificationStatePreferenceKey];
-    self.menuIconMenuItem = [[NSMenuItem alloc] initWithTitle:@"Hide text in menubar" action:@selector(toggleMenuIcon) keyEquivalent:@""];
-    self.menuIconMenuItem.toolTip = @"Replaces song title with an icon to save space in the menu bar";
-    self.menuIconMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPMenuIconPreferenceKey];
     self.startAtLoginMenuItem = [[NSMenuItem alloc] initWithTitle:@"Start at login" action:@selector(toggleStartAtLogin) keyEquivalent:@""];
     self.startAtLoginMenuItem.toolTip = @"Automatically launch SNP when starting up your computer";
     self.startAtLoginMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPStartAtLoginPreferenceKey];
@@ -111,9 +106,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     [mainMenu addItem:self.albumMenuItem];
     [mainMenu addItem:[NSMenuItem separatorItem]];
     [optionsMenu setSubmenu:optionsSubmenu];
-    [optionsSubmenu addItem:self.playerStateMenuItem];
+    [optionsSubmenu addItem:menubarFormatMenuItem];
     [optionsSubmenu addItem:self.notificationStateMenuItem];
-    [optionsSubmenu addItem:self.menuIconMenuItem];
     [optionsSubmenu addItem:self.startAtLoginMenuItem];
     [mainMenu addItem:optionsMenu];
     [mainMenu addItemWithTitle:@"Help" action:@selector(helpDialog) keyEquivalent:@""];
@@ -129,10 +123,10 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.trackID = [[NSString alloc] initWithString:[[self executeAppleScript:@"get id of current track"] stringValue]];
         self.playing = [[[self executeAppleScript:@"get player state"] stringValue] isEqualToString:@"kPSP"];
         self.currentSongName = [[NSString alloc] initWithString:[[self executeAppleScript:@"get name of current track"] stringValue]];
-        [self updateTitle];
         self.songMenuItem.title = self.currentSongName;
         self.artistMenuItem.title = [[self executeAppleScript:@"get artist of current track"] stringValue];
         self.albumMenuItem.title =[[self executeAppleScript:@"get album of current track"] stringValue];
+        [self updateTitle];
         self.statusItem.button.toolTip = [NSString stringWithFormat:@"%@\n%@\n%@",self.currentSongName,self.artistMenuItem.title,self.albumMenuItem.title];
         [self setImage];
         [self showNotification];
@@ -172,7 +166,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     NSAlert *alert = [[NSAlert alloc] init];
     {
         [alert setMessageText:@"Welcome to Spotify Now Playing!"];
-        [alert setInformativeText:@"Spotify Now Playing gives you easy access to see what song is playing in Spotify!\n\nHelp:\nClick on SNP up in the menu bar to see information about the song that's currently playing.\nClick and hold to play/pause, and click and drag right/left to skip/go back.\n\nOptions:\nView play icon in menubar: show a play icon in the menu bar when song is playing.\nSong notifications: get a notification when a new song comes on.\nHide text in menu bar: replaces song title with an icon to save space in the menu bar.\nStart at login: automatically launch SNP when starting up your computer.\n\nEnjoy!\n-Abel John"];
+        [alert setInformativeText:@"Spotify Now Playing gives you easy access to see what song is playing in Spotify!\n\nHelp:\nClick on SNP up in the menu bar to see information about the song that's currently playing.\nClick and hold to play/pause, and click and drag right/left to skip/go back.\n\nOptions:\nMenubar format: customize the menu bar title with {playbackSymbol}, {artist}, {title}, and {album}.\nSong notifications: get a notification when a new song comes on.\nStart at login: automatically launch SNP when starting up your computer.\n\nEnjoy!\n-Abel John"];
         [alert addButtonWithTitle:@"Okay!"];
         [alert setShowsSuppressionButton:YES];
         NSCell *cell = [[alert suppressionButton] cell];
@@ -211,28 +205,15 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
             self.trackID = [[aNotification userInfo] objectForKey:@"Track ID"];
             [self setImage];
             self.currentSongName = [[aNotification userInfo] objectForKey:@"Name"];
-            [self updateTitle];
             self.songMenuItem.title = self.currentSongName;
             self.artistMenuItem.title = [[aNotification userInfo] objectForKey:@"Artist"];
             self.albumMenuItem.title = [[aNotification userInfo] objectForKey:@"Album"];
+            [self updateTitle];
             self.statusItem.button.toolTip = [NSString stringWithFormat:@"%@\n%@\n%@",self.currentSongName,self.artistMenuItem.title,self.albumMenuItem.title];
             [self showNotification];
         } else {
             [self updateTitle];
         }
-    }
-}
-
-- (void)togglePlayerState
-{
-    [[NSUserDefaults standardUserDefaults] setBool:![[NSUserDefaults standardUserDefaults] boolForKey:SNPPlayerStatePreferenceKey] forKey:SNPPlayerStatePreferenceKey];
-    self.playerStateMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPPlayerStatePreferenceKey];
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:SNPPlayerStatePreferenceKey] && self.playing) {
-        self.statusItem.button.title = [NSString stringWithFormat:@"%@ ►", self.statusItem.button.title];
-        self.statusItem.button.image = nil;
-    } else if (![[NSUserDefaults standardUserDefaults] boolForKey:SNPPlayerStatePreferenceKey] && self.playing) {
-        self.statusItem.button.title = [self shortenSongName];
-        [self preventBlankTitle];
     }
 }
 
@@ -242,18 +223,27 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     self.notificationStateMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPNotificationStatePreferenceKey];
 }
 
-- (void)toggleMenuIcon
+- (void)editMenubarFormat
 {
-    [[NSUserDefaults standardUserDefaults] setBool:![[NSUserDefaults standardUserDefaults] boolForKey:SNPMenuIconPreferenceKey] forKey:SNPMenuIconPreferenceKey];
-    self.menuIconMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPMenuIconPreferenceKey];
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:SNPMenuIconPreferenceKey]) {
-        self.playerStateMenuItem.action = nil;
-        self.statusItem.button.title = @"";
-        self.statusItem.button.image = self.menubarImage;
-    } else {
-        self.playerStateMenuItem.action = @selector(togglePlayerState);
-        self.statusItem.button.title = ([[NSUserDefaults standardUserDefaults] boolForKey:SNPPlayerStatePreferenceKey] && self.playing)?[NSString stringWithFormat:@"%@ ►",[self shortenSongName]]:[self shortenSongName];
-        [self preventBlankTitle];
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Menubar Format"];
+    [alert setInformativeText:@"Use {playbackSymbol}, {artist}, {title}, and {album}. Text inside [...] appears only when all placeholders in it have values."];
+    [alert addButtonWithTitle:@"Save"];
+    [alert addButtonWithTitle:@"Cancel"];
+    [alert addButtonWithTitle:@"Restore Defaults"];
+
+    NSTextField *formatField = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 420, 24)];
+    formatField.stringValue = [self menubarFormat];
+    formatField.placeholderString = SNPDefaultMenubarFormat;
+    [alert setAccessoryView:formatField];
+
+    NSModalResponse response = [alert runModal];
+    if (response == NSAlertFirstButtonReturn) {
+        [[NSUserDefaults standardUserDefaults] setObject:formatField.stringValue forKey:SNPMenubarFormatPreferenceKey];
+        [self updateTitle];
+    } else if (response == NSAlertThirdButtonReturn) {
+        [[NSUserDefaults standardUserDefaults] setObject:SNPDefaultMenubarFormat forKey:SNPMenubarFormatPreferenceKey];
+        [self updateTitle];
     }
 }
 
@@ -333,19 +323,6 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         [[NSWorkspace sharedWorkspace] launchApplication:@"Spotify.app"];
     }
     
-}
-
-- (NSString *)shortenSongName
-{
-    NSString *nameText = [NSString stringWithString:self.currentSongName];
-    for (NSUInteger i = 1; i<[nameText length]; i++) {
-        unichar letter = [nameText characterAtIndex:i];
-        if ((letter == '-' || letter == '(' || letter == '[' || letter == '/') && [nameText characterAtIndex:(i-1)] == ' ') {
-            nameText = [nameText substringToIndex:i];
-            break;
-        }
-    }
-    return nameText;
 }
 
 - (void)launchSpotify
@@ -428,13 +405,24 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 
 - (void)updateTitle
 {
-    if (![[NSUserDefaults standardUserDefaults] boolForKey:SNPMenuIconPreferenceKey]) {
-        self.statusItem.button.title = ([[NSUserDefaults standardUserDefaults] boolForKey:SNPPlayerStatePreferenceKey] && self.playing)?[NSString stringWithFormat:@"%@ ►",[self shortenSongName]]:[self shortenSongName];
-        [self preventBlankTitle];
-    } else {
+    if ([self.currentSongName length] == 0) {
         self.statusItem.button.title = @"";
         self.statusItem.button.image = self.menubarImage;
+        return;
     }
+
+    self.statusItem.button.title = [SNPMenuBarTitleFormatter titleWithFormat:[self menubarFormat]
+                                                                    songTitle:self.currentSongName
+                                                                       artist:self.artistMenuItem.title
+                                                                        album:self.albumMenuItem.title
+                                                                      playing:self.playing];
+    [self preventBlankTitle];
+}
+
+- (NSString *)menubarFormat
+{
+    NSString *format = [[NSUserDefaults standardUserDefaults] stringForKey:SNPMenubarFormatPreferenceKey];
+    return format ?: SNPDefaultMenubarFormat;
 }
 
 - (void)preventBlankTitle
