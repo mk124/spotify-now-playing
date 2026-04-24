@@ -12,9 +12,16 @@
 
 static NSString * const SNPNotificationStatePreferenceKey = @"SNPNotificationState";
 static NSString * const SNPMenubarFormatPreferenceKey = @"SNPMenubarFormat";
+static NSString * const SNPRainbowTitleEffectPreferenceKey = @"SNPRainbowTitleEffect";
+static NSString * const SNPRainbowTitleHueStepPreferenceKey = @"SNPRainbowTitleHueStep";
+static NSString * const SNPRainbowTitleSaturationPreferenceKey = @"SNPRainbowTitleSaturation";
 static NSString * const SNPStartAtLoginPreferenceKey = @"SNPStartAtLogin";
 static NSString * const SNPStartupInformationPreferenceKey = @"SNPStartupInformation";
 static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
+static CGFloat const SNPRainbowTitleDefaultHueStep = 0.01;
+static CGFloat const SNPRainbowTitleMinHueStep = 0.001;
+static CGFloat const SNPRainbowTitleMaxHueStep = 0.05;
+static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
 
 @interface AppDelegate ()
 
@@ -27,12 +34,18 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 @property (nonatomic, strong) NSMenuItem *songMenuItem;
 @property (nonatomic, strong) NSMenuItem *artistMenuItem;
 @property (nonatomic, strong) NSMenuItem *albumMenuItem;
+@property (nonatomic, strong) NSMenuItem *rainbowTitleMenuItem;
 @property (nonatomic, strong) NSMenuItem *notificationStateMenuItem;
 @property (nonatomic, strong) NSMenuItem *startAtLoginMenuItem;
 @property (nonatomic, strong) NSTimer *titleRefreshTimer;
+@property (nonatomic, strong) NSTimer *rainbowTitleTimer;
 @property (nonatomic, strong) NSDate *playbackPositionReferenceDate;
+@property (nonatomic, strong) NSString *currentMenubarTitle;
+@property (nonatomic, strong) NSTextField *rainbowHueStepValueLabel;
+@property (nonatomic, strong) NSTextField *rainbowSaturationValueLabel;
 @property (nonatomic) NSTimeInterval currentTrackDuration;
 @property (nonatomic) NSTimeInterval currentPlaybackPosition;
+@property (nonatomic) CGFloat rainbowTitlePhase;
 @property (nonatomic) float panX;
 @property (nonatomic) BOOL playing;
 
@@ -44,7 +57,10 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
     PFMoveToApplicationsFolderIfNecessary();
-    [[NSUserDefaults standardUserDefaults] registerDefaults:@{SNPMenubarFormatPreferenceKey: SNPDefaultMenubarFormat}];
+    [[NSUserDefaults standardUserDefaults] registerDefaults:@{SNPMenubarFormatPreferenceKey: SNPDefaultMenubarFormat,
+                                                              SNPRainbowTitleEffectPreferenceKey: @NO,
+                                                              SNPRainbowTitleHueStepPreferenceKey: @(SNPRainbowTitleDefaultHueStep),
+                                                              SNPRainbowTitleSaturationPreferenceKey: @(SNPRainbowTitleDefaultSaturation)}];
     
     // show welcome screen
     if (![[NSUserDefaults standardUserDefaults] boolForKey:SNPStartupInformationPreferenceKey]) {
@@ -96,6 +112,11 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     // initialize options menu items
     NSMenuItem *menubarFormatMenuItem = [[NSMenuItem alloc] initWithTitle:@"Menubar format..." action:@selector(editMenubarFormat) keyEquivalent:@""];
     menubarFormatMenuItem.toolTip = @"Customize the menu bar title with track and playback time placeholders";
+    self.rainbowTitleMenuItem = [[NSMenuItem alloc] initWithTitle:@"Rainbow title effect" action:@selector(toggleRainbowTitleEffect) keyEquivalent:@""];
+    self.rainbowTitleMenuItem.toolTip = @"Animate the menu bar title colors while music is playing";
+    self.rainbowTitleMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPRainbowTitleEffectPreferenceKey];
+    NSMenuItem *rainbowTitleSettingsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Rainbow title settings..." action:@selector(editRainbowTitleSettings) keyEquivalent:@""];
+    rainbowTitleSettingsMenuItem.toolTip = @"Adjust rainbow title hue spacing and saturation";
     self.notificationStateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Song notifications" action:@selector(toggleNotifications) keyEquivalent:@""];
     self.notificationStateMenuItem.toolTip = @"Get a notification when a new song comes on";
     self.notificationStateMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPNotificationStatePreferenceKey];
@@ -111,6 +132,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     [mainMenu addItem:[NSMenuItem separatorItem]];
     [optionsMenu setSubmenu:optionsSubmenu];
     [optionsSubmenu addItem:menubarFormatMenuItem];
+    [optionsSubmenu addItem:self.rainbowTitleMenuItem];
+    [optionsSubmenu addItem:rainbowTitleSettingsMenuItem];
     [optionsSubmenu addItem:self.notificationStateMenuItem];
     [optionsSubmenu addItem:self.startAtLoginMenuItem];
     [mainMenu addItem:optionsMenu];
@@ -139,8 +162,6 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         
     }
     @catch (NSException *e) {
-        self.statusItem.button.title = @"";
-        self.statusItem.button.image = self.menubarImage;
         self.trackID = @"";
         self.currentSongName = @"";
         self.currentAlbumArt = nil;
@@ -154,8 +175,11 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.currentTrackDuration = 0;
         self.currentPlaybackPosition = 0;
         self.playbackPositionReferenceDate = nil;
+        [self setStatusButtonTitle:@""];
+        [self preventBlankTitle];
         self.statusItem.button.toolTip = @"Spotify Now Playing";
         [self updateTitleRefreshTimer];
+        [self updateRainbowTitleTimer];
     }
     
     // set up notification center
@@ -176,7 +200,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
     NSAlert *alert = [[NSAlert alloc] init];
     {
         [alert setMessageText:@"Welcome to Spotify Now Playing!"];
-        [alert setInformativeText:@"Spotify Now Playing gives you easy access to see what song is playing in Spotify!\n\nHelp:\nClick on SNP up in the menu bar to see information about the song that's currently playing.\nClick and hold to play/pause, and click and drag right/left to skip/go back.\n\nOptions:\nMenubar format: customize the menu bar title with {playbackSymbol}, {artist}, {title}, {album}, {position}, {duration}, and {remaining}.\nSong notifications: get a notification when a new song comes on.\nStart at login: automatically launch SNP when starting up your computer.\n\nEnjoy!\n-Abel John"];
+        [alert setInformativeText:@"Spotify Now Playing gives you easy access to see what song is playing in Spotify!\n\nHelp:\nClick on SNP up in the menu bar to see information about the song that's currently playing.\nClick and hold to play/pause, and click and drag right/left to skip/go back.\n\nOptions:\nMenubar format: customize the menu bar title with {playbackSymbol}, {artist}, {title}, {album}, {position}, {duration}, and {remaining}.\nRainbow title effect: animate the menu bar title colors while music is playing.\nSong notifications: get a notification when a new song comes on.\nStart at login: automatically launch SNP when starting up your computer.\n\nEnjoy!\n-Abel John"];
         [alert addButtonWithTitle:@"Okay!"];
         [alert setShowsSuppressionButton:YES];
         NSCell *cell = [[alert suppressionButton] cell];
@@ -195,8 +219,6 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 - (void)playbackStateChanged:(NSNotification *)aNotification
 {
     if ([[[aNotification userInfo] objectForKey:@"Player State"] isEqualToString:@"Stopped"]) {
-        self.statusItem.button.title = @"";
-        self.statusItem.button.image = self.menubarImage;
         self.trackID = @"";
         self.currentSongName = @"";
         self.currentAlbumArt = nil;
@@ -210,8 +232,11 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         self.currentTrackDuration = 0;
         self.currentPlaybackPosition = 0;
         self.playbackPositionReferenceDate = nil;
+        [self setStatusButtonTitle:@""];
+        [self preventBlankTitle];
         self.statusItem.button.toolTip = @"Spotify Now Playing";
         [self updateTitleRefreshTimer];
+        [self updateRainbowTitleTimer];
     } else {
         self.playing = [[[aNotification userInfo] objectForKey:@"Player State"] isEqualToString:@"Playing"];
         if (![[[aNotification userInfo] objectForKey:@"Track ID"] isEqualToString:self.trackID]
@@ -238,6 +263,81 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 {
     [[NSUserDefaults standardUserDefaults] setBool:![[NSUserDefaults standardUserDefaults] boolForKey:SNPNotificationStatePreferenceKey] forKey:SNPNotificationStatePreferenceKey];
     self.notificationStateMenuItem.state = [[NSUserDefaults standardUserDefaults] boolForKey:SNPNotificationStatePreferenceKey];
+}
+
+- (void)toggleRainbowTitleEffect
+{
+    BOOL enabled = ![[NSUserDefaults standardUserDefaults] boolForKey:SNPRainbowTitleEffectPreferenceKey];
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:SNPRainbowTitleEffectPreferenceKey];
+    self.rainbowTitleMenuItem.state = enabled;
+    [self updateTitle];
+}
+
+- (void)editRainbowTitleSettings
+{
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:@"Rainbow Title Settings"];
+    [alert setInformativeText:@"Adjust hue spacing and saturation. Brightness is fixed at 100%."];
+    [alert addButtonWithTitle:@"Save"];
+    [alert addButtonWithTitle:@"Cancel"];
+    [alert addButtonWithTitle:@"Restore Defaults"];
+
+    NSView *settingsView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 420, 66)];
+    NSTextField *hueLabel = [NSTextField labelWithString:@"Hue spacing"];
+    hueLabel.frame = NSMakeRect(0, 42, 90, 18);
+    NSSlider *hueSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(96, 40, 250, 20)];
+    hueSlider.minValue = SNPRainbowTitleMinHueStep;
+    hueSlider.maxValue = SNPRainbowTitleMaxHueStep;
+    hueSlider.doubleValue = [self rainbowTitleHueStep];
+    hueSlider.continuous = YES;
+    hueSlider.target = self;
+    hueSlider.action = @selector(rainbowSettingsSliderChanged:);
+    hueSlider.tag = 1;
+    self.rainbowHueStepValueLabel = [NSTextField labelWithString:[self stringFromRainbowHueStep:hueSlider.doubleValue]];
+    self.rainbowHueStepValueLabel.frame = NSMakeRect(356, 42, 64, 18);
+
+    NSTextField *saturationLabel = [NSTextField labelWithString:@"Saturation"];
+    saturationLabel.frame = NSMakeRect(0, 12, 90, 18);
+    NSSlider *saturationSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(96, 10, 250, 20)];
+    saturationSlider.minValue = 0;
+    saturationSlider.maxValue = 1;
+    saturationSlider.doubleValue = [self rainbowTitleSaturation];
+    saturationSlider.continuous = YES;
+    saturationSlider.target = self;
+    saturationSlider.action = @selector(rainbowSettingsSliderChanged:);
+    saturationSlider.tag = 2;
+    self.rainbowSaturationValueLabel = [NSTextField labelWithString:[self stringFromRainbowSaturation:saturationSlider.doubleValue]];
+    self.rainbowSaturationValueLabel.frame = NSMakeRect(356, 12, 64, 18);
+
+    [settingsView addSubview:hueLabel];
+    [settingsView addSubview:hueSlider];
+    [settingsView addSubview:self.rainbowHueStepValueLabel];
+    [settingsView addSubview:saturationLabel];
+    [settingsView addSubview:saturationSlider];
+    [settingsView addSubview:self.rainbowSaturationValueLabel];
+    [alert setAccessoryView:settingsView];
+
+    NSModalResponse response = [alert runModal];
+    if (response == NSAlertFirstButtonReturn) {
+        [[NSUserDefaults standardUserDefaults] setDouble:hueSlider.doubleValue forKey:SNPRainbowTitleHueStepPreferenceKey];
+        [[NSUserDefaults standardUserDefaults] setDouble:saturationSlider.doubleValue forKey:SNPRainbowTitleSaturationPreferenceKey];
+        [self updateTitle];
+    } else if (response == NSAlertThirdButtonReturn) {
+        [[NSUserDefaults standardUserDefaults] setDouble:SNPRainbowTitleDefaultHueStep forKey:SNPRainbowTitleHueStepPreferenceKey];
+        [[NSUserDefaults standardUserDefaults] setDouble:SNPRainbowTitleDefaultSaturation forKey:SNPRainbowTitleSaturationPreferenceKey];
+        [self updateTitle];
+    }
+    self.rainbowHueStepValueLabel = nil;
+    self.rainbowSaturationValueLabel = nil;
+}
+
+- (void)rainbowSettingsSliderChanged:(NSSlider *)slider
+{
+    if (slider.tag == 1) {
+        self.rainbowHueStepValueLabel.stringValue = [self stringFromRainbowHueStep:slider.doubleValue];
+    } else if (slider.tag == 2) {
+        self.rainbowSaturationValueLabel.stringValue = [self stringFromRainbowSaturation:slider.doubleValue];
+    }
 }
 
 - (void)editMenubarFormat
@@ -432,9 +532,10 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 - (void)updateTitle
 {
     if ([self.currentSongName length] == 0) {
-        self.statusItem.button.title = @"";
-        self.statusItem.button.image = self.menubarImage;
+        [self setStatusButtonTitle:@""];
+        [self preventBlankTitle];
         [self updateTitleRefreshTimer];
+        [self updateRainbowTitleTimer];
         return;
     }
 
@@ -451,22 +552,58 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
         }
     }
 
-    self.statusItem.button.title = [SNPMenuBarTitleFormatter titleWithFormat:format
-                                                                    songTitle:self.currentSongName
-                                                                       artist:self.artistMenuItem.title
-                                                                        album:self.albumMenuItem.title
-                                                                     position:position
-                                                                     duration:duration
-                                                                    remaining:remaining
-                                                                      playing:self.playing];
+    NSString *title = [SNPMenuBarTitleFormatter titleWithFormat:format
+                                                      songTitle:self.currentSongName
+                                                         artist:self.artistMenuItem.title
+                                                          album:self.albumMenuItem.title
+                                                       position:position
+                                                       duration:duration
+                                                      remaining:remaining
+                                                        playing:self.playing];
+    [self setStatusButtonTitle:title];
     [self preventBlankTitle];
     [self updateTitleRefreshTimer];
+    [self updateRainbowTitleTimer];
 }
 
 - (NSString *)menubarFormat
 {
     NSString *format = [[NSUserDefaults standardUserDefaults] stringForKey:SNPMenubarFormatPreferenceKey];
     return format ?: SNPDefaultMenubarFormat;
+}
+
+- (BOOL)rainbowTitleEffectEnabled
+{
+    return [[NSUserDefaults standardUserDefaults] boolForKey:SNPRainbowTitleEffectPreferenceKey];
+}
+
+- (CGFloat)rainbowTitleHueStep
+{
+    return [self clampedRainbowValue:[[NSUserDefaults standardUserDefaults] doubleForKey:SNPRainbowTitleHueStepPreferenceKey]
+                             minimum:SNPRainbowTitleMinHueStep
+                             maximum:SNPRainbowTitleMaxHueStep];
+}
+
+- (CGFloat)rainbowTitleSaturation
+{
+    return [self clampedRainbowValue:[[NSUserDefaults standardUserDefaults] doubleForKey:SNPRainbowTitleSaturationPreferenceKey]
+                             minimum:0
+                             maximum:1];
+}
+
+- (CGFloat)clampedRainbowValue:(CGFloat)value minimum:(CGFloat)minimum maximum:(CGFloat)maximum
+{
+    return MIN(MAX(value, minimum), maximum);
+}
+
+- (NSString *)stringFromRainbowHueStep:(CGFloat)hueStep
+{
+    return [NSString stringWithFormat:@"%.3f", hueStep];
+}
+
+- (NSString *)stringFromRainbowSaturation:(CGFloat)saturation
+{
+    return [NSString stringWithFormat:@"%.0f%%", saturation * 100];
 }
 
 - (void)updateTitleRefreshTimer
@@ -485,6 +622,81 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 {
     timer = nil;
     [self updateTitle];
+}
+
+- (void)setStatusButtonTitle:(NSString *)title
+{
+    self.currentMenubarTitle = title ?: @"";
+    if ([self shouldShowRainbowTitle]) {
+        [self applyRainbowTitle];
+    } else {
+        self.statusItem.button.attributedTitle = [[NSAttributedString alloc] initWithString:@""];
+        self.statusItem.button.title = self.currentMenubarTitle;
+    }
+}
+
+- (void)updateRainbowTitleTimer
+{
+    if ([self shouldShowRainbowTitle]) {
+        if (!self.rainbowTitleTimer) {
+            self.rainbowTitleTimer = [NSTimer scheduledTimerWithTimeInterval:0.12 target:self selector:@selector(rainbowTitleTimerFired:) userInfo:nil repeats:YES];
+        }
+    } else {
+        [self.rainbowTitleTimer invalidate];
+        self.rainbowTitleTimer = nil;
+        self.statusItem.button.attributedTitle = [[NSAttributedString alloc] initWithString:@""];
+        self.statusItem.button.title = self.currentMenubarTitle ?: @"";
+    }
+}
+
+- (void)rainbowTitleTimerFired:(NSTimer *)timer
+{
+    timer = nil;
+    self.rainbowTitlePhase += 0.025;
+    if (self.rainbowTitlePhase >= 1.0) {
+        self.rainbowTitlePhase -= 1.0;
+    }
+
+    if ([self shouldShowRainbowTitle]) {
+        [self applyRainbowTitle];
+    } else {
+        [self updateRainbowTitleTimer];
+    }
+}
+
+- (BOOL)shouldShowRainbowTitle
+{
+    return [self rainbowTitleEffectEnabled] && self.playing && [self.currentMenubarTitle length] != 0;
+}
+
+- (void)applyRainbowTitle
+{
+    NSString *title = self.currentMenubarTitle ?: @"";
+    NSMutableAttributedString *attributedTitle = [[NSMutableAttributedString alloc] initWithString:title];
+    NSFont *font = self.statusItem.button.font ?: [NSFont systemFontOfSize:[NSFont systemFontSize]];
+    [attributedTitle addAttribute:NSFontAttributeName value:font range:NSMakeRange(0, [title length])];
+
+    CGFloat hueStep = [self rainbowTitleHueStep];
+    CGFloat saturation = [self rainbowTitleSaturation];
+    __block NSUInteger characterIndex = 0;
+    [title enumerateSubstringsInRange:NSMakeRange(0, [title length])
+                              options:NSStringEnumerationByComposedCharacterSequences
+                           usingBlock:^(NSString *substring, NSRange substringRange, NSRange enclosingRange, BOOL *stop) {
+        (void)substring;
+        (void)enclosingRange;
+        (void)stop;
+        CGFloat hue = (characterIndex * hueStep) - self.rainbowTitlePhase;
+        while (hue < 0) {
+            hue += 1.0;
+        }
+        while (hue >= 1.0) {
+            hue -= 1.0;
+        }
+        NSColor *color = [NSColor colorWithCalibratedHue:hue saturation:saturation brightness:1.0 alpha:1.0];
+        [attributedTitle addAttribute:NSForegroundColorAttributeName value:color range:substringRange];
+        characterIndex++;
+    }];
+    self.statusItem.button.attributedTitle = attributedTitle;
 }
 
 - (void)refreshPlaybackPositionFromSpotify
@@ -537,7 +749,7 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 
 - (void)preventBlankTitle
 {
-    if ([self.statusItem.button.title length] != 0) {
+    if ([self.currentMenubarTitle length] != 0) {
         self.statusItem.button.image = nil;
     } else {
         // if the menubar has no text then display the icon so the user can see where the app is
@@ -555,6 +767,8 @@ static NSString * const SNPFirstLoginKey = @"SNPFirstLogin";
 {
     [self.titleRefreshTimer invalidate];
     self.titleRefreshTimer = nil;
+    [self.rainbowTitleTimer invalidate];
+    self.rainbowTitleTimer = nil;
     [[NSUserNotificationCenter defaultUserNotificationCenter] removeAllDeliveredNotifications];
     [[NSApplication sharedApplication] terminate:self];
 }

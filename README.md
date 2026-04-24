@@ -20,6 +20,7 @@ Song name in menubar
 - default menubar format: `{playbackSymbol} [{artist} - ]{title}`
 - available format placeholders: `{playbackSymbol}`, `{artist}`, `{title}`, `{album}`, `{position}`, `{duration}`, `{remaining}`
 - optional format segments: text inside `[...]` appears only when all placeholders in it have values
+- optional rainbow title effect while music is playing, with adjustable hue spacing and saturation
 - hover over song name to see full song name, artist, and album
 - control music playback with a click and hold on song name to play/pause, click and drag right to skip, click and drag left to go back
 - opening menubar application shows album art, full song name, artist, and album
