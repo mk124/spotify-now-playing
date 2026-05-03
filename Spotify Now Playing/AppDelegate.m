@@ -22,6 +22,7 @@ static CGFloat const SNPRainbowTitleDefaultHueStep = 0.01;
 static CGFloat const SNPRainbowTitleMinHueStep = 0.001;
 static CGFloat const SNPRainbowTitleMaxHueStep = 0.05;
 static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
+static NSTimeInterval const SNPPlaybackPositionSyncInterval = 5.0;
 
 @interface AppDelegate ()
 
@@ -40,6 +41,7 @@ static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
 @property (nonatomic, strong) NSTimer *titleRefreshTimer;
 @property (nonatomic, strong) NSTimer *rainbowTitleTimer;
 @property (nonatomic, strong) NSDate *playbackPositionReferenceDate;
+@property (nonatomic, strong) NSDate *lastPlaybackPositionSyncDate;
 @property (nonatomic, strong) NSString *currentMenubarTitle;
 @property (nonatomic, strong) NSTextField *rainbowHueStepValueLabel;
 @property (nonatomic, strong) NSTextField *rainbowSaturationValueLabel;
@@ -175,6 +177,7 @@ static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
         self.currentTrackDuration = 0;
         self.currentPlaybackPosition = 0;
         self.playbackPositionReferenceDate = nil;
+        self.lastPlaybackPositionSyncDate = nil;
         [self setStatusButtonTitle:@""];
         [self preventBlankTitle];
         self.statusItem.button.toolTip = @"Spotify Now Playing";
@@ -232,6 +235,7 @@ static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
         self.currentTrackDuration = 0;
         self.currentPlaybackPosition = 0;
         self.playbackPositionReferenceDate = nil;
+        self.lastPlaybackPositionSyncDate = nil;
         [self setStatusButtonTitle:@""];
         [self preventBlankTitle];
         self.statusItem.button.toolTip = @"Spotify Now Playing";
@@ -532,6 +536,7 @@ static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
 - (void)updateTitle
 {
     if ([self.currentSongName length] == 0) {
+        self.lastPlaybackPositionSyncDate = nil;
         [self setStatusButtonTitle:@""];
         [self preventBlankTitle];
         [self updateTitleRefreshTimer];
@@ -608,7 +613,7 @@ static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
 
 - (void)updateTitleRefreshTimer
 {
-    if (self.playing && [self.currentSongName length] != 0 && [SNPMenuBarTitleFormatter formatUsesPlaybackTime:[self menubarFormat]]) {
+    if ([self.currentSongName length] != 0 && [SNPMenuBarTitleFormatter formatUsesPlaybackTime:[self menubarFormat]]) {
         if (!self.titleRefreshTimer) {
             self.titleRefreshTimer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(titleRefreshTimerFired:) userInfo:nil repeats:YES];
         }
@@ -621,6 +626,7 @@ static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
 - (void)titleRefreshTimerFired:(NSTimer *)timer
 {
     timer = nil;
+    [self refreshPlaybackPositionFromSpotifyIfNeeded];
     [self updateTitle];
 }
 
@@ -701,8 +707,26 @@ static CGFloat const SNPRainbowTitleDefaultSaturation = 0.5;
 
 - (void)refreshPlaybackPositionFromSpotify
 {
+    NSDate *now = [NSDate date];
     self.currentPlaybackPosition = [self playbackPositionFromSpotify];
-    self.playbackPositionReferenceDate = [NSDate date];
+    self.playbackPositionReferenceDate = now;
+    self.lastPlaybackPositionSyncDate = now;
+}
+
+- (void)refreshPlaybackPositionFromSpotifyIfNeeded
+{
+    if ([self.currentSongName length] == 0 || ![SNPMenuBarTitleFormatter formatUsesPlaybackTime:[self menubarFormat]]) {
+        return;
+    }
+
+    NSDate *now = [NSDate date];
+    if (self.lastPlaybackPositionSyncDate && [now timeIntervalSinceDate:self.lastPlaybackPositionSyncDate] < SNPPlaybackPositionSyncInterval) {
+        return;
+    }
+
+    self.currentPlaybackPosition = [self playbackPositionFromSpotify];
+    self.playbackPositionReferenceDate = now;
+    self.lastPlaybackPositionSyncDate = now;
 }
 
 - (NSTimeInterval)estimatedPlaybackPosition
